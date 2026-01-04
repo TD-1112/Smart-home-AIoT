@@ -1,0 +1,76 @@
+#include "esp_log.h"
+#include "api.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include <string.h>
+
+static const char *TAG = "MASTER";
+static const char *TAG_ESPNOW_RECV = "ESPNOW_RECV";
+
+static const uint8_t SLAVE_MAC[6] = {0xEC, 0xDA, 0x3B, 0xBF, 0xA0, 0x04}; // MAC thực của slave
+
+#define ESPNOW_RECV_TASK_PRIORITY 3
+#define ESPNOW_RECV_TASK_STACK_SIZE 3072 // Increased from 2048 to avoid stack overflow
+
+void task_espnow_receive(void *pvParameters)
+{
+    ESP_LOGI(TAG_ESPNOW_RECV, "Task started");
+
+    espnow_msg_t received_msg;
+
+    while (true)
+    {
+        esp_err_t ret = espnow_api_recv(&received_msg, pdMS_TO_TICKS(1000));
+
+        if (ret == ESP_OK)
+        {
+            // Decode payload: [Type(1 byte)] [Value_High(1 byte)] [Value_Low(1 byte)]
+            if (received_msg.len >= 3)
+            {
+                uint8_t msg_type = received_msg.data[0];
+                uint8_t value_high = received_msg.data[1];
+                uint8_t value_low = received_msg.data[2];
+
+                // Convert bytes to uint16 (Big-endian)
+                uint16_t decoded_value = ((uint16_t)value_high << 8) | value_low;
+
+                ESP_LOGI(TAG_ESPNOW_RECV, "Type=0x%02X Val=%d (0x%04X) Bytes=[0x%02X,0x%02X,0x%02X]",
+                         msg_type, decoded_value, decoded_value,
+                         msg_type, value_high, value_low);
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// ==================== Main Application ====================
+void app_main(void)
+{
+    ESP_LOGI(TAG, " MASTER starting...");
+
+    // Initialize ESP-NOW API with slave MAC
+    espnow_api_init(SLAVE_MAC);
+    ESP_LOGI(TAG, "ESP-NOW API initialized with slave [%02X:%02X:%02X:%02X:%02X:%02X]",
+             SLAVE_MAC[0], SLAVE_MAC[1], SLAVE_MAC[2],
+             SLAVE_MAC[3], SLAVE_MAC[4], SLAVE_MAC[5]);
+
+    // Initialize receive queue (optional - can customize size if needed)
+    espnow_api_recv_queue_init(10);
+    ESP_LOGI(TAG, "ESP-NOW receive queue initialized (size: 10)");
+
+    // Create task to receive and decode ESP-NOW messages
+    xTaskCreate(
+        task_espnow_receive,
+        "espnow_recv_task",
+        ESPNOW_RECV_TASK_STACK_SIZE,
+        NULL,
+        ESPNOW_RECV_TASK_PRIORITY,
+        NULL);
+    ESP_LOGI(TAG, "ESP-NOW Receive task created");
+
+    while (true)
+    {
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}

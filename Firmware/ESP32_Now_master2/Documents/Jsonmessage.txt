@@ -1,0 +1,57 @@
+khung bản tin json 
+
+
+enum : uint8_t 
+{
+	ASK_DATA,
+	CONTROL
+}master_cmd;
+
+
+master:(luôn là người ra lệnh để hỏi các slave ở dưới)
+
+khung bản tin JSon(sử dụng thư viện CJson)
+{
+	ID	: địa chỉ mac của master 
+	DST : Địa chỉ mac của slave( 1 trong 3 con esp32)
+	TYPE: ask_data;
+}
+
+
+{
+	ID	: địa chỉ mac của master 
+	DST : Địa chỉ mac của slave( 1 trong 3 con esp32)
+	TYPE: control;
+	CMD : 
+	{
+		"CMD" : turn on led / turn off led
+	
+	}
+}
+
+Slave (người trả lời câu hỏi từ master và sẽ kèm cả nhận lệnh điều khiển từ master)
+
+
+khung bản tin
+{
+	ID : địa chỉ mac của slave(ví dụ như slave 1 là slave đọc cảm biến DHT11)
+	DST: địa chỉ mac của master 
+	TYPE: Response data to master
+	data:
+	{
+		"temp" : 25 (int)
+		"humi" : 80 (int)
+	}
+}
+
+
+bản tin của slave đọc cảm biến lux 
+{
+	ID : địa chỉ mac của slave
+	DST: địa chỉ mac của master 
+	TYPE: Response data to master
+	data:
+	{
+		"lux" : 1234142 (int)
+	}
+}

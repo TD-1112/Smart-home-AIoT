@@ -1,0 +1,1 @@
+I (528) wifi:mode : sta (ec:da:3b:bf:7b:c4)

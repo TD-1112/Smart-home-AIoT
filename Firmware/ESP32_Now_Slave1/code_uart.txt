@@ -1,0 +1,97 @@
+#include "esp_log.h"
+#include "api.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include <string.h>
+#include "lib_uart.h"
+#include "lib_math.h"
+#include "fsm.h"
+#include "message.h"
+
+#define UART_TX_PIN 10
+#define UART_RX_PIN 9
+#define UART_BAUD_RATE 115200
+
+// Task priorities
+#define TASK_SEND_PRIORITY 2
+#define TASK_RECV_PRIORITY 3
+
+// Task stack sizes
+#define TASK_SEND_STACK_SIZE 2048
+#define TASK_RECV_STACK_SIZE 2048
+
+// Send task delay (ms)
+#define SEND_TASK_DELAY_MS 10
+static const char *TAG = "MASTER";
+static const char *TAG_SEND = "SEND_TASK";
+static const char *TAG_RECV = "RECV_TASK";
+
+Frame_Message mess;
+
+// ==================== TASK: Send ASK Message ====================
+void task_send_ask(void *pvParameters)
+{
+    ESP_LOGI(TAG_SEND, "Task Send ASK started");
+
+    uint8_t ask_message[10] = {0};
+    uint16_t ask_length = create_message(ASK_MESSAGE, 0, ask_message);
+
+    while (true)
+    {
+        uart.send.bytes(ask_message, ask_length);
+        vTaskDelay(SEND_TASK_DELAY_MS / portTICK_PERIOD_MS);
+    }
+}
+
+// ==================== TASK: Receive and Decode Response ====================
+void task_receive_response(void *pvParameters)
+{
+    ESP_LOGI(TAG_RECV, "Task Receive Response started");
+
+    while (true)
+    {
+        if (uart.check.is_message())
+        {
+            decode_message(&mess);
+            if (mess.type_message == RESPONSE_MESSAGE)
+            {
+                uint16_t value = math.convert.bytes_to_uint16(mess.data[1], mess.data[0]);
+                ESP_LOGI(TAG_RECV, "Decoded value: %d (0x%04X)", value, value);
+            }
+            else
+            {
+                ESP_LOGW(TAG_RECV, "Received unknown message type: 0x%02X", mess.type_message);
+            }
+        }
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+// ==================== Main Application ====================
+void app_main(void)
+{
+    uart_init_with_fsm(UART_BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
+    ESP_LOGI(TAG, "UART initialized");
+
+    xTaskCreate(
+        task_send_ask,
+        "send_ask_task",
+        TASK_SEND_STACK_SIZE,
+        NULL,
+        TASK_SEND_PRIORITY,
+        NULL);
+    ESP_LOGI(TAG, "Send ASK task created");
+    xTaskCreate(
+        task_receive_response,
+        "recv_resp_task",
+        TASK_RECV_STACK_SIZE,
+        NULL,
+        TASK_RECV_PRIORITY,
+        NULL);
+    ESP_LOGI(TAG, "Receive Response task created");
+    while (true)
+    {
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}

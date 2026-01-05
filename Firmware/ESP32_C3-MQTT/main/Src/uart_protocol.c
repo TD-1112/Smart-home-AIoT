@@ -26,7 +26,7 @@ void extract_sensor_data_from_json(const char *json_str, Sensor_Data *sensor_dat
     cJSON *data = cJSON_GetObjectItem(root, "data");
     if (data != NULL && cJSON_IsObject(data))
     {
-        // Lấy lux nếu có
+        // get lux value if exists
         cJSON *lux = cJSON_GetObjectItem(data, "lux");
         if (lux != NULL && cJSON_IsNumber(lux))
         {
@@ -35,7 +35,7 @@ void extract_sensor_data_from_json(const char *json_str, Sensor_Data *sensor_dat
             ESP_LOGI(TAG, "Found lux: %d", sensor_data->lux);
         }
 
-        // Lấy temp nếu có
+        // get temp value if exists
         cJSON *temp = cJSON_GetObjectItem(data, "temp");
         if (temp != NULL && cJSON_IsNumber(temp))
         {
@@ -44,7 +44,7 @@ void extract_sensor_data_from_json(const char *json_str, Sensor_Data *sensor_dat
             ESP_LOGI(TAG, "Found temp: %d", sensor_data->temp);
         }
 
-        // Lấy humi nếu có
+        // get humi value if exists
         cJSON *humi = cJSON_GetObjectItem(data, "humi");
         if (humi != NULL && cJSON_IsNumber(humi))
         {
@@ -57,9 +57,16 @@ void extract_sensor_data_from_json(const char *json_str, Sensor_Data *sensor_dat
     cJSON_Delete(root);
 }
 
+/**
+ * @brief Extract sensor data from multiple JSON messages
+ *
+ * @param json_messages
+ * @param count
+ * @param sensor_data
+ */
 void extract_sensor_data_from_multiple_json(const char **json_messages, int count, Sensor_Data *sensor_data)
 {
-    // Khởi tạo tất cả giá trị = 0 và flags = NONE
+    // initialize sensor_data fields
     sensor_data->flags = SENSOR_FLAG_NONE;
     sensor_data->lux = 0;
     sensor_data->temp = 0;
@@ -70,7 +77,7 @@ void extract_sensor_data_from_multiple_json(const char **json_messages, int coun
         return;
     }
 
-    // Duyệt qua tất cả các JSON messages
+    // Iterate through each JSON message and extract data
     for (int i = 0; i < count; i++)
     {
         if (json_messages[i] != NULL)
@@ -83,6 +90,12 @@ void extract_sensor_data_from_multiple_json(const char **json_messages, int coun
              sensor_data->flags, sensor_data->lux, sensor_data->temp, sensor_data->humi);
 }
 
+/**
+ * @brief Create a uart data message object
+ * @param sensor_data -> sensor data to encode
+ * @param data_out -> array to store uart data message
+ * @return uint16_t  - length of data_out
+ */
 uint16_t create_uart_data_message(Sensor_Data *sensor_data, uint8_t *data_out)
 {
     if (data_out == NULL || sensor_data == NULL)
@@ -100,7 +113,7 @@ uint16_t create_uart_data_message(Sensor_Data *sensor_data, uint8_t *data_out)
     // Type message
     data_out[idx++] = UART_MSG_DATA;
 
-    // Length placeholder (sẽ điền sau)
+    // Length placeholder (will fill later)
     uint16_t length_pos = idx;
     data_out[idx++] = 0x00; // length high
     data_out[idx++] = 0x00; // length low
@@ -112,17 +125,17 @@ uint16_t create_uart_data_message(Sensor_Data *sensor_data, uint8_t *data_out)
     data_out[idx++] = sensor_data->temp;
     data_out[idx++] = sensor_data->humi;
 
-    // Tính tổng độ dài (từ 0xAA đến cuối data, chưa tính checksum)
-    uint16_t total_length = idx + 2; // +2 cho checksum
+    // Calculate total length (from 0xAA to end of data, excluding checksum)
+    uint16_t total_length = idx + 2; // +2 for checksum
 
-    // Ghi length vào đúng vị trí (little endian - bytes_to_uint16 dùng union)
+    // Write length to the correct position (little endian - bytes_to_uint16 uses union)
     data_out[length_pos] = (uint8_t)(total_length & 0xFF);   // low byte
     data_out[length_pos + 1] = (uint8_t)(total_length >> 8); // high byte
 
-    // Tính checksum (tất cả bytes trước checksum)
+    // Calculate checksum (all bytes before checksum)
     uint16_t checksum = caculate_checksum(data_out, idx);
 
-    // Thêm checksum (little endian như uint16_to_bytes)
+    // Add checksum (little endian like uint16_to_bytes)
     uint8_t *chk = math.convert.uint16_to_bytes(checksum);
     data_out[idx++] = chk[0];
     data_out[idx++] = chk[1];
@@ -130,9 +143,15 @@ uint16_t create_uart_data_message(Sensor_Data *sensor_data, uint8_t *data_out)
     ESP_LOGI(TAG, "Created UART data message: flags=0x%02X, lux=%d, temp=%d, humi=%d",
              sensor_data->flags, sensor_data->lux, sensor_data->temp, sensor_data->humi);
 
-    return idx; // Trả về tổng số byte đã ghi
+    return idx; // Return total number of bytes written
 }
 
+/**
+ * @brief Parse JSON string to UART data message
+ * @param json_str -> input JSON string
+ * @param data_out -> output UART data message
+ * @return uint16_t -> length of data_out
+ */
 uint16_t parse_json_to_uart_data(const char *json_str, uint8_t *data_out)
 {
     if (data_out == NULL)
@@ -152,6 +171,14 @@ uint16_t parse_json_to_uart_data(const char *json_str, uint8_t *data_out)
     return create_uart_data_message(&sensor_data, data_out);
 }
 
+/**
+ * @brief Create a uart control message object`
+ *
+ * @param plug_id
+ * @param status
+ * @param data_out
+ * @return uint16_t
+ */
 uint16_t create_uart_control_message(Plug_ID plug_id, Plug_Status status, uint8_t *data_out)
 {
     if (data_out == NULL)
@@ -178,14 +205,14 @@ uint16_t create_uart_control_message(Plug_ID plug_id, Plug_Status status, uint8_
     data_out[idx++] = (uint8_t)plug_id;
     data_out[idx++] = (uint8_t)status;
 
-    // Tính tổng độ dài
-    uint16_t total_length = idx + 2; // +2 cho checksum
+    // Calculate total length
+    uint16_t total_length = idx + 2; // +2 for checksum
 
-    // Ghi length (little endian - bytes_to_uint16 dùng union)
+    // Write length (little endian - bytes_to_uint16 uses union)
     data_out[length_pos] = (uint8_t)(total_length & 0xFF);   // low byte
     data_out[length_pos + 1] = (uint8_t)(total_length >> 8); // high byte
 
-    // Tính checksum
+    // Calculate checksum
     uint16_t checksum = caculate_checksum(data_out, idx);
     uint8_t *chk = math.convert.uint16_to_bytes(checksum);
     data_out[idx++] = chk[0];
@@ -198,6 +225,13 @@ uint16_t create_uart_control_message(Plug_ID plug_id, Plug_Status status, uint8_
 
 // ============ UART TO JSON ============
 
+/**
+ * @brief Decode UART data message to JSON string
+ *
+ * @param uart_data
+ * @param length
+ * @return char*
+ */
 char *decode_uart_data_to_json(const uint8_t *uart_data, uint16_t length)
 {
     if (uart_data == NULL || length < sizeof(Frame_Message))
@@ -208,21 +242,21 @@ char *decode_uart_data_to_json(const uint8_t *uart_data, uint16_t length)
 
     Frame_Message *frame = (Frame_Message *)uart_data;
 
-    // Kiểm tra start message
+    // Check start message
     if (frame->start_message != 0xAA55)
     {
         ESP_LOGE(TAG, "Invalid start message: 0x%04X", frame->start_message);
         return NULL;
     }
 
-    // Kiểm tra message type
+    // Check message type
     if (frame->type_message != UART_MSG_DATA)
     {
         ESP_LOGE(TAG, "Not a data message: 0x%02X", frame->type_message);
         return NULL;
     }
 
-    // Kiểm tra length
+    // Check     length
     if (frame->length_message < 5)
     {
         ESP_LOGE(TAG, "Invalid data length: %d", frame->length_message);
@@ -235,13 +269,13 @@ char *decode_uart_data_to_json(const uint8_t *uart_data, uint16_t length)
     uint8_t temp = frame->data[3];
     uint8_t humi = frame->data[4];
 
-    // Tạo JSON telemetry
+    // Create JSON telemetry
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "telemetry");
 
     cJSON *data = cJSON_CreateObject();
 
-    // Chỉ thêm các giá trị có flag tương ứng
+    // Add sensor values based on flags
     if (flags & SENSOR_FLAG_LUX)
     {
         cJSON_AddNumberToObject(data, "lux", lux);
@@ -267,6 +301,13 @@ char *decode_uart_data_to_json(const uint8_t *uart_data, uint16_t length)
     return json_str;
 }
 
+/**
+ * @brief Decode UART control message to JSON string
+ *
+ * @param uart_data
+ * @param length
+ * @return char*
+ */
 char *decode_uart_control_to_json(const uint8_t *uart_data, uint16_t length)
 {
     if (uart_data == NULL || length < sizeof(Frame_Message))
@@ -277,21 +318,21 @@ char *decode_uart_control_to_json(const uint8_t *uart_data, uint16_t length)
 
     Frame_Message *frame = (Frame_Message *)uart_data;
 
-    // Kiểm tra start message
+    // Check start message
     if (frame->start_message != 0xAA55)
     {
         ESP_LOGE(TAG, "Invalid start message: 0x%04X", frame->start_message);
         return NULL;
     }
 
-    // Kiểm tra message type
+    // Check message type
     if (frame->type_message != UART_MSG_CONTROL)
     {
         ESP_LOGE(TAG, "Not a control message: 0x%02X", frame->type_message);
         return NULL;
     }
 
-    // Kiểm tra length
+    // Check length
     if (frame->length_message < 2)
     {
         ESP_LOGE(TAG, "Invalid data length: %d", frame->length_message);
@@ -302,13 +343,13 @@ char *decode_uart_control_to_json(const uint8_t *uart_data, uint16_t length)
     uint8_t plug_id = frame->data[0];
     uint8_t status = frame->data[1];
 
-    // Tạo JSON control
+    // Create JSON control
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "control");
 
     cJSON *data = cJSON_CreateObject();
 
-    // Tạo plug name
+    // Create plug name
     char plug_name[10];
     snprintf(plug_name, sizeof(plug_name), "plug_%d", plug_id + 1);
 

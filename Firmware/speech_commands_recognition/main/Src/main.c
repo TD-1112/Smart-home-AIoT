@@ -3,7 +3,6 @@
  * @brief Main application - Speech Commands Recognition
  * @details Initialize all modules and create tasks
  */
-
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

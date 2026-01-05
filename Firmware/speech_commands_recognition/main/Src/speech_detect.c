@@ -28,19 +28,32 @@ static const char *TAG_MN = "[MN]";
 srmodel_list_t *g_models = NULL;
 volatile int g_detect_flag = 0;
 
-/* ================== HELPER FUNCTIONS ================== */
+/**
+ * @brief Compare two strings for equality
+ * @details Returns 1 if equal, 0 otherwise
+ * @param str1
+ * @param str2
+ * @return int Returns 1 if strings are equal, 0 otherwise
+ */
 static int string_cmp(const char *str1, const char *str2)
 {
     return (strcmp(str1, str2) == 0) ? 1 : 0;
 }
 
-/* ================== PUBLIC FUNCTIONS ================== */
+/**
+ * @brief Configure LED GPIO
+ * @details Sets up the GPIO pin for LED output use for status indication of speech detection
+ */
 void led_config(void)
 {
     gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
     gpio_set_level(GPIO_LED, 0);
 }
 
+/**
+ * @brief Initialize speech models
+ * @return esp_err_t
+ */
 esp_err_t speech_models_init(void)
 {
     g_models = esp_srmodel_init("model");
@@ -51,19 +64,25 @@ esp_err_t speech_models_init(void)
     return ESP_OK;
 }
 
+/**
+ * @brief Initialize AFE for speech recognition
+ * @details Configures and creates AFE instance for speech recognition with specified settings
+ * @return esp_err_t
+ */
 esp_err_t speech_afe_init(void)
 {
     g_afe = (esp_afe_sr_iface_t *)&ESP_AFE_SR_HANDLE;
 
     afe_config_t cfg = AFE_CONFIG_DEFAULT();
+    // Set wakenet model (first wakenet)
     cfg.wakenet_model_name = esp_srmodel_filter(g_models, ESP_WN_PREFIX, NULL);
 
-    cfg.aec_init = false;
-    cfg.se_init = false;
+    cfg.aec_init = false; // Disable AEC
+    cfg.se_init = false;  // Disable SE
 
-    cfg.pcm_config.total_ch_num = 1;
-    cfg.pcm_config.mic_num = 1;
-    cfg.pcm_config.ref_num = 0;
+    cfg.pcm_config.total_ch_num = 1; // mono input
+    cfg.pcm_config.mic_num = 1;      // 1 mic channel
+    cfg.pcm_config.ref_num = 0;      // 0 reference channel
 
     g_afe_data = g_afe->create_from_config(&cfg);
     if (g_afe_data == NULL)
@@ -74,6 +93,11 @@ esp_err_t speech_afe_init(void)
     return ESP_OK;
 }
 
+/**
+ * @brief Process recognized command
+ * @details Maps recognized command strings to plug control actions
+ * @param cmd_string
+ */
 static void process_command(const char *cmd_string)
 {
     // ============ TURN ON PLUG 1 ============
@@ -145,7 +169,11 @@ static void process_command(const char *cmd_string)
         plug_send_command(PLUG_3, STATE_OFF);
     }
 }
-
+/**
+ * @brief Speech detection task
+ * @details Main loop for wake word detection and command recognition
+ * @param arg
+ */
 void detect_task(void *arg)
 {
     led_config();

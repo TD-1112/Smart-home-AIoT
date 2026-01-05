@@ -19,11 +19,7 @@ static const char *TAG = "[MAIN]";
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "===========================================");
-    ESP_LOGI(TAG, "   Speech Commands Recognition Started");
-    ESP_LOGI(TAG, "===========================================");
-
-    // ========== WiFi Init ==========
+    // ========= WiFi Init ==========
     ESP_LOGI(TAG, "Initializing WiFi...");
     esp_err_t err_wifi = wifi_init_sta(WIFI_SSID, WIFI_PASSWORD);
     if (err_wifi != ESP_OK)
@@ -106,8 +102,4 @@ void app_main(void)
         NULL,
         MQTT_TASK_CORE);
     ESP_LOGI(TAG, "  [OK] mqtt_task on Core %d", MQTT_TASK_CORE);
-
-    ESP_LOGI(TAG, "===========================================");
-    ESP_LOGI(TAG, "   All tasks started successfully!");
-    ESP_LOGI(TAG, "===========================================");
 }

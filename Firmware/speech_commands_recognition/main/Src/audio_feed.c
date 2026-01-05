@@ -17,7 +17,11 @@ esp_afe_sr_data_t *g_afe_data = NULL;
 i2s_chan_handle_t g_rx_chan = NULL;
 volatile int g_task_flag = 1;
 
-/* ================== PUBLIC FUNCTIONS ================== */
+/**
+ * @brief Initialize I2S for audio input
+ * @details Configures I2S channel for audio input from microphone
+ * @return esp_err_t
+ */
 esp_err_t audio_i2s_init(void)
 {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(
@@ -56,6 +60,11 @@ esp_err_t audio_i2s_init(void)
     return ESP_OK;
 }
 
+/**
+ * @brief Audio feed task
+ * @details Reads audio data from I2S and feeds it to AFE
+ * @param arg
+ */
 void feed_task(void *arg)
 {
     int chunk = g_afe->get_feed_chunksize(g_afe_data);

@@ -26,7 +26,11 @@ static my_mqtt_init_t mqtt_cfg = {
     .topic_pub = MQTT_TOPIC_PUB,
     .topic_sub = MQTT_TOPIC_SUB};
 
-/* ================== HELPER FUNCTIONS ================== */
+/**
+ * @brief Get the plug name object
+ * @param plug
+ * @return const char*
+ */
 static const char *get_plug_name(plug_id_t plug)
 {
     switch (plug)
@@ -42,7 +46,11 @@ static const char *get_plug_name(plug_id_t plug)
     }
 }
 
-/* ================== PUBLIC FUNCTIONS ================== */
+/**
+ * @brief Initialize plug control module
+ * @details Creates MQTT queue and initializes MQTT
+ * @return esp_err_t
+ */
 esp_err_t plug_control_init(void)
 {
     // Create MQTT queue
@@ -65,6 +73,12 @@ esp_err_t plug_control_init(void)
     return ESP_OK;
 }
 
+/**
+ * @brief Send command to MQTT task
+ * @details Sends plug command to MQTT queue for publishing
+ * @param plug
+ * @param state
+ */
 void plug_send_command(plug_id_t plug, plug_state_t state)
 {
     mqtt_msg_t msg = {
@@ -76,7 +90,12 @@ void plug_send_command(plug_id_t plug, plug_state_t state)
         ESP_LOGW(TAG, "MQTT queue full, message dropped");
     }
 }
-
+/**
+ * @brief Publish plug state to MQTT
+ * @details Constructs JSON message and publishes to MQTT topic
+ * @param plug
+ * @param state
+ */
 void plug_publish_mqtt(plug_id_t plug, plug_state_t state)
 {
     cJSON *root = cJSON_CreateObject();
@@ -120,6 +139,13 @@ void plug_publish_mqtt(plug_id_t plug, plug_state_t state)
     cJSON_Delete(root);
 }
 
+/**
+ * @brief Set plug flag state
+ * @details Updates the global plug flags based on plug ID and state
+ * @param plug 
+ * @param state 
+ * @return * void 
+ */
 void plug_set_flag(plug_id_t plug, plug_state_t state)
 {
     switch (plug)
@@ -138,6 +164,12 @@ void plug_set_flag(plug_id_t plug, plug_state_t state)
     }
 }
 
+/**
+ * @brief Set all plug flags to a specific state
+ * @details Updates all plug flags in the global structure
+ * @param state 
+ * @return * void 
+ */
 void plug_set_all_flags(plug_state_t state)
 {
     g_plug_flags.flag_plug_1 = state;
@@ -145,6 +177,11 @@ void plug_set_all_flags(plug_state_t state)
     g_plug_flags.flag_plug_3 = state;
 }
 
+/**
+ * @brief MQTT task to process and publish messages
+ * @details Waits for messages on the MQTT queue and publishes them
+ * @param arg 
+ */
 void mqtt_task(void *arg)
 {
     ESP_LOGI(TAG, "MQTT task started");
